@@ -27,6 +27,7 @@ type Connection = {
 }
 
 
+let interfaceCheckerId: number;
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const [ loaded, setLoaded ] = useState(false);
@@ -38,7 +39,6 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
   const [ openVPNDisabled, setOpenVPNDisabled ] = useState(false);
 
-  let interfaceCheckerId: number;
   const interfaceChecker = () => {
     clearTimeout(interfaceCheckerId);
     interfaceCheckerId = window.setTimeout(() => {
