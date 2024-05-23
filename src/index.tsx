@@ -26,6 +26,7 @@ type Connection = {
   ipv6_disabled?: boolean
 }
 
+
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const [ loaded, setLoaded ] = useState(false);
@@ -42,7 +43,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     clearTimeout(interfaceCheckerId);
     interfaceCheckerId = window.setTimeout(() => {
       getInterfaceData().finally(interfaceChecker);
-    }, 30000);
+    }, 3000);
   }
 
   const collectNetworkInfo = () => {
@@ -54,9 +55,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const getInterfaceData = async () => {
     const priorityInterfaceLanIpResponse = await serverAPI.callPluginMethod('get_priority_lan_ip', {});
-    const priorityInterfaceResponse = await serverAPI.callPluginMethod('get_priority_interface', {});
-    priorityInterface = priorityInterfaceLanIpResponse.result as string;
-    setPriorityInterfaceLanIp(priorityInterface);
+    const priorityInterfaceResponse = await serverAPI.callPluginMethod('get_priority_interface_name', {});
+    setPriorityInterfaceLanIp(priorityInterfaceLanIpResponse.result as string);
     setPriorityInterface(priorityInterfaceResponse.result as string);
   }
 
@@ -126,6 +126,9 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   useEffect(() => {
     loadConnections();
+    return () => {
+      clearTimeout(interfaceCheckerId);
+    }
   }, []);
 
   return (
@@ -205,5 +208,9 @@ export default definePlugin((serverApi: ServerAPI) => {
     title: <div className={staticClasses.Title}>TunnelDeck</div>,
     content: <Content serverAPI={serverApi} />,
     icon: <FaShieldAlt />,
+    onDismount() {
+      console.log('sup!');
+      clearTimeout(interfaceCheckerId);
+    }
   };
 });
