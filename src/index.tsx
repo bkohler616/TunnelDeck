@@ -6,7 +6,8 @@ import {
   staticClasses,
   ToggleField,
   ButtonItem,
-  Navigation
+  Navigation,
+  Field
 } from "decky-frontend-lib";
 
 import {
@@ -29,10 +30,35 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const [ loaded, setLoaded ] = useState(false);
   const [ connections, setConnections ] = useState<Connection[]>([]);
+  const [ priorityInterface, setPriorityInterface ] = useState('N/A');
+  const [ priorityInterfaceLanIp, setPriorityInterfaceLanIp ] = useState('N/A');
   const [ activeConnection, setActiveConnection ] = useState<Connection>();
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
   const [ openVPNDisabled, setOpenVPNDisabled ] = useState(false);
+
+  let interfaceCheckerId: number;
+  const interfaceChecker = () => {
+    clearTimeout(interfaceCheckerId);
+    interfaceCheckerId = window.setTimeout(() => {
+      getInterfaceData().finally(interfaceChecker);
+    }, 30000);
+  }
+
+  const collectNetworkInfo = () => {
+    clearTimeout(interfaceCheckerId);
+    window.setTimeout(() => {
+      getInterfaceData().finally(interfaceChecker);
+    }, 300);
+  }
+
+  const getInterfaceData = async () => {
+    const priorityInterfaceLanIpResponse = await serverAPI.callPluginMethod('get_priority_lan_ip', {});
+    const priorityInterfaceResponse = await serverAPI.callPluginMethod('get_priority_interface', {});
+    priorityInterface = priorityInterfaceLanIpResponse.result as string;
+    setPriorityInterfaceLanIp(priorityInterface);
+    setPriorityInterface(priorityInterfaceResponse.result as string);
+  }
 
   const loadConnections = async () => {
 
@@ -78,20 +104,24 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
 
     setLoaded(true);
+    collectNetworkInfo();
   }
 
   const toggleConnection = async (connection: Connection, switchValue: boolean) => {
     await serverAPI.callPluginMethod((switchValue) ? 'up' : 'down', { uuid: connection.uuid });
+    collectNetworkInfo();
   }
 
   const toggleIpv6 = async(switchValue: boolean) => {
     setIpv6Disabled(switchValue);
     await serverAPI.callPluginMethod((switchValue) ? 'disable_ipv6' : 'enable_ipv6', {});
+    collectNetworkInfo();
   }
 
   const toggleOpenVPN = async(switchValue: boolean) => {
     setOpenVPNEnabled(switchValue);
     await serverAPI.callPluginMethod((switchValue) ? 'enable_openvpn' : 'disable_openvpn', {});
+    collectNetworkInfo();
   }
 
   useEffect(() => {
@@ -121,7 +151,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
         <PanelSectionRow>
           <ButtonItem onClick={() => {
-            Navigation.NavigateToExternalWeb('https://github.com/steve228uk/TunnelDeck#readme');
+            Navigation.NavigateToExternalWeb('https://github.com/bkohler616/TunnelDeck#readme');
             Navigation.CloseSideMenus();
           }}>
             How Do I Add Connections?
@@ -129,6 +159,22 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
         </PanelSectionRow>
 
       </PanelSection>
+
+      <PanelSection title="Network Info">
+        <PanelSectionRow>
+          <Field
+            label='Prioritized Network Interface'
+            description={priorityInterface}>
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Field
+            label='Prioritized Interface LAN IP'
+            description={priorityInterfaceLanIp}>
+          </Field>
+      </PanelSectionRow>
+      </PanelSection>
+
       <PanelSection title="Settings">
         <PanelSectionRow>
           <ToggleField
