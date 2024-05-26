@@ -131,6 +131,28 @@ class Plugin:
         run_uninstall_script()
         return True
 
+    # Collect the current LAN ip
+    async def get_priority_lan_ip(self):
+        logger.debug("Collecting LAN ip")
+        # "ip route get 1.2.3.4 | awk '{print $3; exit}'"
+        ip_data = subprocess.run(["ip", "route", "get", "1.2.3.4"], text=True, capture_output=True).stdout
+        result = ip_data.split(' ')[6]
+        logger.debug("LAN ip", result)
+        return result
+
+    # Figure out the priority interface name
+    async def get_priority_interface_name(self):
+        logger.debug("Collecting priority interface")
+        ip_data = subprocess.run(["ip", "route", "get", "1.2.3.4"], text=True, capture_output=True).stdout
+        result = re.search('(?<=(dev ))(\S+)', ip_data)
+        if not result:
+            result = 'Unknown'
+        else:
+            result = result[0]
+
+        logger.debug("Priority interface", result)
+        return result
+
     # Clean-up on aisle 5
     async def _unload(self):
         subprocess.run(["bash", path.dirname(__file__) + "/extensions/uninstall"], cwd=path.dirname(__file__) + "/extensions")
