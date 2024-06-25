@@ -26,6 +26,11 @@ type Connection = {
   ipv6_disabled?: boolean
 }
 
+type PluginResponse = {
+  success: boolean,
+  data: string,
+}
+
 
 let interfaceCheckerId: number;
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
@@ -34,6 +39,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [ connections, setConnections ] = useState<Connection[]>([]);
   const [ priorityInterface, setPriorityInterface ] = useState('N/A');
   const [ priorityInterfaceLanIp, setPriorityInterfaceLanIp ] = useState('N/A');
+  const [ canReachGateway, setCanReachGateway ] = useState('N/A');
+  const [ canReachSteam, setCanReachSteam ] = useState('N/A');
   const [ activeConnection, setActiveConnection ] = useState<Connection>();
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
@@ -54,10 +61,17 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   }
 
   const getInterfaceData = async () => {
-    const priorityInterfaceLanIpResponse = await serverAPI.callPluginMethod('get_priority_lan_ip', {});
-    const priorityInterfaceResponse = await serverAPI.callPluginMethod('get_priority_interface_name', {});
-    setPriorityInterfaceLanIp(priorityInterfaceLanIpResponse.result as string);
-    setPriorityInterface(priorityInterfaceResponse.result as string);
+    debugger;
+    const priorityInterfaceLanIpResponse = await serverAPI.callPluginMethod<{}, PluginResponse>('get_priority_lan_ip', {});
+    const priorityInterfaceResponse = await serverAPI.callPluginMethod<{}, PluginResponse>('get_priority_interface_name', {});
+    const isSteamSteamAvailableResponse = await serverAPI.callPluginMethod<{}, boolean>('is_internet_available', {});
+    const isGatewayAvailableResponse = await serverAPI.callPluginMethod<{}, boolean>('is_gateway_available', {});
+    const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
+    const interfaceRes = priorityInterfaceResponse.result as PluginResponse;
+    setPriorityInterfaceLanIp(lanIpRes.data);
+    setPriorityInterface(interfaceRes.data);
+    setCanReachGateway(isGatewayAvailableResponse.result ? 'Yes' : 'No');
+    setCanReachSteam(isSteamSteamAvailableResponse.result ? 'Yes' : 'No');
   }
 
   const loadConnections = async () => {
@@ -172,10 +186,22 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
         </PanelSectionRow>
         <PanelSectionRow>
           <Field
-            label='Prioritized Interface LAN IP'
-            description={priorityInterfaceLanIp}>
+              label='Prioritized Interface LAN IP'
+              description={priorityInterfaceLanIp}>
           </Field>
-      </PanelSectionRow>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Field
+              label='Can reach gateway'
+              description={canReachGateway}>
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Field
+              label='Can reach steampowered.com'
+              description={canReachSteam}>
+          </Field>
+        </PanelSectionRow>
       </PanelSection>
 
       <PanelSection title="Settings">
