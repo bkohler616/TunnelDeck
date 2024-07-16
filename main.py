@@ -1,4 +1,5 @@
 import subprocess
+import pprint
 import logging
 from os import path
 from settings import SettingsManager
@@ -14,7 +15,7 @@ logging.basicConfig(filename="/tmp/tunneldeck.log",
                     filemode="w+",
                     force=True)
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 def connection_mapper(xn):
@@ -35,6 +36,7 @@ def get_active_connection():
     mapped = map(connection_mapper, connections)
     return next(filter(lambda xn: xn["type"] == 'wifi' or xn["type"] == 'ethernet', mapped), None)
 
+
 def run_install_script():
     logger.info("Running Install Script")
     subprocess.run(["bash", path.dirname(__file__) + "/extensions/install"], cwd=path.dirname(__file__) + "/extensions")
@@ -46,8 +48,31 @@ def run_uninstall_script():
                    cwd=path.dirname(__file__) + "/extensions")
 
 
-class Plugin:
+pp = pprint.PrettyPrinter(indent=2, sort_dicts=False)
 
+
+def log_pretty(obj):
+    pretty_out = f"{pp.pformat(obj)}"
+
+    return f'{pretty_out}\n'
+
+
+def get_steam_ip():
+    logger.debug("Collecting steam's IP")
+    getent_data = subprocess.run(["getent", "ahosts", "steampowered.com"], text=True, capture_output=True)
+    ip = ""
+    logger.debug(f"Collecting steam's IP - getting steam ip {getent_data}")
+    if getent_data.stderr:
+        return ip
+    stdout_lines = getent_data.stdout.splitlines()
+    for e in stdout_lines:
+        if "STREAM" in e:
+            res = e.split(" ")[0]
+            logger.debug(f"steam's ip is {log_pretty(res)}")
+            return res
+
+
+class Plugin:
     settings: SettingsManager = SettingsManager("tunneldeck", path.join(HOMEBREW_PATH, "settings"))
 
     async def _main(self):
@@ -146,7 +171,7 @@ class Plugin:
     async def get_priority_lan_ip(self):
         logger.debug("Collecting LAN ip")
         # "ip route get 1.2.3.4 | awk '{print $3; exit}'"
-        steam_ip = self.get_steam_ip()
+        steam_ip = get_steam_ip()
         logger.debug("Collecting LAN ip - got steam IP")
         ip_data = subprocess.run(["ip", "route", "get", steam_ip], text=True, capture_output=True).stdout
         if not ip_data:
@@ -160,7 +185,7 @@ class Plugin:
     # Figure out the priority interface name
     async def get_priority_interface_name(self):
         logger.debug("Collecting priority interface")
-        steam_ip = self.get_steam_ip()
+        steam_ip = get_steam_ip()
         logger.debug("Collecting priority interface - got steam ip")
         ip_data = subprocess.run(["ip", "route", "get", steam_ip], text=True, capture_output=True).stdout
         logger.debug("Priority interface response %s", ip_data)
@@ -176,20 +201,21 @@ class Plugin:
 
     # Can we ping steampowered.com
     async def is_internet_available(self):
-        return await self.can_ping_address("steampowered.com")
+        return await self.can_ping_address(self, "steampowered.com")
 
     # Can we ping the priority interface's gateway or DNS.
     async def is_gateway_available(self):
         logger.debug("is_gateway_available enter")
-        connection_data = await self.active_connection()
+        connection_data = await self.active_connection(self) # I swear to god if adding self works I'mma lose it.
         logger.debug("is_gateway_available connection_data %s", connection_data)
-        interface_name = await self.get_priority_interface_name()
+        interface_name = await self.get_priority_interface_name(self)
         logger.debug("is_gateway_available interface_name %s", interface_name)
         if connection_data is None or not interface_name['success']:
             logger.debug("is_gateway_available instant drop out due to no response or bad interface")
             return False
 
-        nmcli_res = subprocess.run(["nmcli", "-f", "all", "-t", "device", "show", interface_name[data]], text=True, capture_output=True).stdout.splitlines()
+        nmcli_res = subprocess.run(["nmcli", "-f", "all", "-t", "device", "show", interface_name['data']], text=True,
+                                   capture_output=True).stdout.splitlines()
         logger.debug("is_gateway_available nmcli_res %s", nmcli_res)
 
         final_res = None
@@ -214,27 +240,13 @@ class Plugin:
         if final_res is None:
             logger.debug("is_gateway_available did not find address")
             return False
-        return await self.can_ping_address(final_res)
+        return await self.can_ping_address(self, final_res)
 
     async def can_ping_address(self, address):
         logger.debug("Pinging %s", address)
         ping_data = subprocess.run(["ping", "-c", "1", address], text=True, capture_output=True)
         logger.debug("Pinging %s finish", address)
         return not bool(ping_data.stderr)
-
-    async def get_steam_ip(self):
-        logger.debug("Collecting steam's IP")
-        getent_data = subprocess.run(["getent", "ahosts", "steampowered.com"], text=True, capture_output=True)
-        ip = ""
-        logger.debug("Collecting steam's IP - getting steam ip %s", getent_data)
-        if getent_data.stderr:
-            return ip
-        stdout_lines = getent_data.stdout.splitlines()
-        for e in stdout_lines:
-            if "STREAM" in e:
-                res = e.split(" ")[0]
-                logger.debug("steam's ip is %s", res)
-                return res
 
     # Clean-up on aisle 5
     async def _unload(self):

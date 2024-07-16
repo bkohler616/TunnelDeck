@@ -45,12 +45,13 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
   const [ openVPNDisabled, setOpenVPNDisabled ] = useState(false);
+  const [ isRefreshing, setIsRefreshing ] = useState(false);
 
   const interfaceChecker = () => {
     clearTimeout(interfaceCheckerId);
     interfaceCheckerId = window.setTimeout(() => {
       getInterfaceData().finally(interfaceChecker);
-    }, 3000);
+    }, 5000);
   }
 
   const collectNetworkInfo = () => {
@@ -60,18 +61,34 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }, 300);
   }
 
+  const tryCatchHandler = async (name: String, func: Function, methodName: String, args: Object, defaultRes: Object) => {
+    try {
+      return await func(methodName, args);
+    } catch (e) {
+      console.error('Error handling function', name, methodName);
+      return defaultRes;
+    }
+  }
+
   const getInterfaceData = async () => {
+    setIsRefreshing(true);
     debugger;
-    const priorityInterfaceLanIpResponse = await serverAPI.callPluginMethod<{}, PluginResponse>('get_priority_lan_ip', {});
-    const priorityInterfaceResponse = await serverAPI.callPluginMethod<{}, PluginResponse>('get_priority_interface_name', {});
-    const isSteamSteamAvailableResponse = await serverAPI.callPluginMethod<{}, boolean>('is_internet_available', {});
-    const isGatewayAvailableResponse = await serverAPI.callPluginMethod<{}, boolean>('is_gateway_available', {});
+
+    const priorityInterfaceLanIpResponse = await tryCatchHandler('priorityInterfaceLaneIpResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'get_priority_lan_ip', {}, {result: {success:false, data: 'N/A'}});
     const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
-    const interfaceRes = priorityInterfaceResponse.result as PluginResponse;
     setPriorityInterfaceLanIp(lanIpRes.data);
+
+    const isSteamSteamAvailableResponse = await tryCatchHandler('isSteamSteamAvailableResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'is_internet_available', {}, {result: {success:false, data: 'N/A'}});
+    setCanReachSteam(isSteamSteamAvailableResponse.result && isSteamSteamAvailableResponse.success ? 'Yes' : 'No');
+
+    const priorityInterfaceResponse = await tryCatchHandler('priorityInterfaceResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'get_priority_interface_name', {}, {result: false});
+    const interfaceRes = priorityInterfaceResponse.result as PluginResponse;
     setPriorityInterface(interfaceRes.data);
-    setCanReachGateway(isGatewayAvailableResponse.result ? 'Yes' : 'No');
-    setCanReachSteam(isSteamSteamAvailableResponse.result ? 'Yes' : 'No');
+
+    const isGatewayAvailableResponse = await tryCatchHandler('isGatewayAvailableResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'is_gateway_available', {}, {result: false});
+    setCanReachGateway(isGatewayAvailableResponse.result && isGatewayAvailableResponse.success ? 'Yes' : 'No');
+
+    setIsRefreshing(false);
   }
 
   const loadConnections = async () => {
@@ -177,29 +194,33 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
       </PanelSection>
 
-      <PanelSection title="Network Info">
+      <PanelSection title="Network Info" spinner={isRefreshing}>
         <PanelSectionRow>
           <Field
             label='Prioritized Network Interface'
-            description={priorityInterface}>
+            description={priorityInterface}
+            focusable={true}>
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
           <Field
               label='Prioritized Interface LAN IP'
-              description={priorityInterfaceLanIp}>
+              description={priorityInterfaceLanIp}
+              focusable={true}>
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
           <Field
               label='Can reach gateway'
-              description={canReachGateway}>
+              description={canReachGateway}
+              focusable={true}>
           </Field>
         </PanelSectionRow>
         <PanelSectionRow>
           <Field
               label='Can reach steampowered.com'
-              description={canReachSteam}>
+              description={canReachSteam}
+              focusable={true}>
           </Field>
         </PanelSectionRow>
       </PanelSection>
