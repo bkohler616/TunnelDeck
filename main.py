@@ -15,7 +15,7 @@ logging.basicConfig(filename="/tmp/tunneldeck.log",
                     filemode="w+",
                     force=True)
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 def connection_mapper(xn):
@@ -177,7 +177,8 @@ class Plugin:
         if not ip_data:
             result = {"success": False, "data": "N/A"}
         else:
-            result = {"success": True, "data": ip_data.split(" ")[6]}
+            regex_result = re.search(r"(?<=(src ))(\S+)", ip_data)
+            result = {"success": bool(regex_result[0]), "data": regex_result[0]}
         logger.debug("LAN ip - sendingRes: %s", result)
         logger.debug("LAN ip - IP_DATA response: %s", ip_data)
         return result
@@ -219,24 +220,47 @@ class Plugin:
         logger.debug("is_gateway_available nmcli_res %s", nmcli_res)
 
         final_res = None
-        if connection_data["ipv6_disabled"]:
-            for e in nmcli_res:
+        for e in nmcli_res:
+            if not connection_data["ipv6_disabled"]:
                 if "IP6.GATEWAY" in e and e.split(":")[1]:
+                    final_res = e.split(":")[1]
+                    break
+                if "IP6.DNS[3]" in e and e.split(":")[1]:
+                    final_res = e.split(":")[1]
+                    break
+                if "IP6.DNS[2]" in e and e.split(":")[1]:
                     final_res = e.split(":")[1]
                     break
                 if "IP6.DNS[1]" in e and e.split(":")[1]:
                     final_res = e.split(":")[1]
                     break
-        else:
-            for e in nmcli_res:
-                if "IP4.GATEWAY" in e and e.split(":")[1]:
-                    final_res = e.split(":")[1]
-                    logger.debug("is_gateway_available ip4.gateway found %s", final_res)
-                    break
-                if "IP4.DNS[1]" in e and e.split(":")[1]:
-                    final_res = e.split(":")[1]
-                    logger.debug("is_gateway_available ip4.dns found %s", final_res)
-                    break
+            if "IP4.GATEWAY" in e and e.split(":")[1]:
+                #'IP4.GATEWAY:192.168.2.1'
+                final_res = e.split(":")[1]
+                logger.debug("is_gateway_available ip4.gateway found %s", final_res)
+                break
+            if "IP4.DNS[3]" in e and e.split(":")[1]:
+                final_res = e.split(":")[1]
+                logger.debug("is_gateway_available ip4.dns3 found %s", final_res)
+                break
+            if "IP4.DNS[2]" in e and e.split(":")[1]:
+                # 'IP4.DNS[2]:192.168.2.1'
+                final_res = e.split(":")[1]
+                logger.debug("is_gateway_available ip4.dns2 found %s", final_res)
+                break
+            if "IP4.DNS[1]" in e and e.split(":")[1]:
+                # 'IP4.DNS[1]:8.8.8.8'
+                final_res = e.split(":")[1]
+                logger.debug("is_gateway_available ip4.dns1 found %s", final_res)
+                break
+
+            if ":domain_name_servers" in e and e.split(":")[1]:
+                # 'DHCP4.OPTION[5]:domain_name_servers = 8.8.8.8 192.168.2.1'
+                final_res = e.strip().split(":")  # 'domain_name_servers = 8.8.8.8 192.168.2.1'
+                final_res = final_res[1].split("=") if final_res[1] else ""  # ' 8.8.8.8 192.168.2.1'
+                final_res = final_res[1].split(" ") if final_res[1] else ""  # ['8.8.8.8', '192.168.2.1']
+                final_res = final_res[-1] if final_res[-1] else ""
+
         if final_res is None:
             logger.debug("is_gateway_available did not find address")
             return False
@@ -247,6 +271,17 @@ class Plugin:
         ping_data = subprocess.run(["ping", "-c", "1", address], text=True, capture_output=True)
         logger.debug("Pinging %s finish", address)
         return not bool(ping_data.stderr)
+
+    async def set_logging_type(self, logging_type):
+        if 'I' in logging_type.upper():
+            logger.setLevel(logging.INFO)
+            return
+
+        if 'D' in logging_type.upper():
+            logger.setLevel(logging.INFO)
+            return
+
+        logger.setLevel(logging.INFO if logger.level is logging.DEBUG else logging.DEBUG)
 
     # Clean-up on aisle 5
     async def _unload(self):

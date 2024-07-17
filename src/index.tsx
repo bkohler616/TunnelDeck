@@ -45,11 +45,14 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
   const [ openVPNDisabled, setOpenVPNDisabled ] = useState(false);
-  const [ isRefreshing, setIsRefreshing ] = useState(false);
+  const [ isRefreshing, setIsRefreshing ] = useState(true);
 
   const interfaceChecker = () => {
     clearTimeout(interfaceCheckerId);
     interfaceCheckerId = window.setTimeout(() => {
+      if (isRefreshing) {
+        return interfaceChecker();
+      }
       getInterfaceData().finally(interfaceChecker);
     }, 5000);
   }
@@ -57,8 +60,11 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const collectNetworkInfo = () => {
     clearTimeout(interfaceCheckerId);
     window.setTimeout(() => {
+      if (isRefreshing) {
+        return interfaceChecker();
+      }
       getInterfaceData().finally(interfaceChecker);
-    }, 300);
+    }, 1000);
   }
 
   const tryCatchHandler = async (name: String, func: Function, methodName: String, args: Object, defaultRes: Object) => {
@@ -70,9 +76,16 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
   }
 
+  const setRefreshState = () => {
+    setIsRefreshing(true);
+    setPriorityInterface('N/A');
+    setPriorityInterfaceLanIp('N/A');
+    setCanReachSteam('N/A');
+    setCanReachGateway('N/A');
+  }
+
   const getInterfaceData = async () => {
     setIsRefreshing(true);
-    debugger;
 
     const priorityInterfaceLanIpResponse = await tryCatchHandler('priorityInterfaceLaneIpResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'get_priority_lan_ip', {}, {result: {success:false, data: 'N/A'}});
     const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
@@ -139,18 +152,21 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   }
 
   const toggleConnection = async (connection: Connection, switchValue: boolean) => {
+    setRefreshState();
     await serverAPI.callPluginMethod((switchValue) ? 'up' : 'down', { uuid: connection.uuid });
     collectNetworkInfo();
   }
 
   const toggleIpv6 = async(switchValue: boolean) => {
     setIpv6Disabled(switchValue);
+    setRefreshState();
     await serverAPI.callPluginMethod((switchValue) ? 'disable_ipv6' : 'enable_ipv6', {});
     collectNetworkInfo();
   }
 
   const toggleOpenVPN = async(switchValue: boolean) => {
     setOpenVPNEnabled(switchValue);
+    setRefreshState();
     await serverAPI.callPluginMethod((switchValue) ? 'enable_openvpn' : 'disable_openvpn', {});
     collectNetworkInfo();
   }
