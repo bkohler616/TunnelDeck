@@ -41,6 +41,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [ priorityInterfaceLanIp, setPriorityInterfaceLanIp ] = useState('N/A');
   const [ canReachGateway, setCanReachGateway ] = useState('N/A');
   const [ canReachSteam, setCanReachSteam ] = useState('N/A');
+  const [ priorityNetworkInfo, setPriorityNetworkInfo ] = useState(['N/A']);
   const [ activeConnection, setActiveConnection ] = useState<Connection>();
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
@@ -60,9 +61,6 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const collectNetworkInfo = () => {
     clearTimeout(interfaceCheckerId);
     window.setTimeout(() => {
-      if (isRefreshing) {
-        return interfaceChecker();
-      }
       getInterfaceData().finally(interfaceChecker);
     }, 1000);
   }
@@ -77,15 +75,20 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   }
 
   const setRefreshState = () => {
+    clearTimeout(interfaceCheckerId);
     setIsRefreshing(true);
     setPriorityInterface('N/A');
     setPriorityInterfaceLanIp('N/A');
     setCanReachSteam('N/A');
     setCanReachGateway('N/A');
+    setPriorityNetworkInfo(['N/A']);
   }
 
   const getInterfaceData = async () => {
+    debugger;
     setIsRefreshing(true);
+
+    await tryCatchHandler('resetCachedData', serverAPI.callPluginMethod<{}, boolean>, 'reset_cached_data', {}, true)
 
     const priorityInterfaceLanIpResponse = await tryCatchHandler('priorityInterfaceLaneIpResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'get_priority_lan_ip', {}, {result: {success:false, data: 'N/A'}});
     const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
@@ -100,6 +103,9 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
     const isGatewayAvailableResponse = await tryCatchHandler('isGatewayAvailableResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'is_gateway_available', {}, {result: false});
     setCanReachGateway(isGatewayAvailableResponse.result && isGatewayAvailableResponse.success ? 'Yes' : 'No');
+
+    const priorityNetworkInfo = await tryCatchHandler('priorityNetworkInfo', serverAPI.callPluginMethod<{}, string>, 'get_prioritized_network_info', {}, 'N/A Err')
+    setPriorityNetworkInfo(priorityNetworkInfo.result.split('\n'));
 
     setIsRefreshing(false);
   }
@@ -261,6 +267,21 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
           description='Disables IPV6 support for the current connection. Required for some VPNs.'
           onChange={toggleIpv6} />
         </PanelSectionRow>
+      </PanelSection>
+      <PanelSection title="Additional network info" spinner={isRefreshing}>
+
+        {loaded && priorityNetworkInfo.length == 0 && <PanelSectionRow>
+          No Network Info found
+        </PanelSectionRow>}
+
+        {priorityNetworkInfo.length > 0 && priorityNetworkInfo.map((infoItem) => (
+            <PanelSectionRow>
+              <Field
+                  description={infoItem}
+                  focusable={true}
+                  padding={"none"}/>
+            </PanelSectionRow>
+        ))}
       </PanelSection>
     </>
   );
