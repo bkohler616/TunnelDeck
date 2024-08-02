@@ -31,8 +31,33 @@ type PluginResponse = {
   data: string,
 }
 
+const funcMap = {
+  show: 'show',
+  up: 'up',
+  down: 'down',
+  activeConnection: 'active_connection',
+  resetCachedData: 'reset_cached_data',
+  disableIpv6: 'disable_ipv6',
+  enableIpv6: 'enable_ipv6',
+  getSteamIp: 'get_steam_ip',
+  isOpenvpnPacmanInstalled: 'is_openvpn_pacman_installed',
+  isOpenvpnEnabled: 'is_openvpn_enabled',
+  enableOpenvpn: 'enable_openvpn',
+  disableOpenvpn: 'disable_openvpn',
+  getPriorityLanIp: 'get_priority_lan_ip',
+  getPriorityInterfaceName: 'get_priority_interface_name',
+  getPrioritizedNetworkInfo: 'get_prioritized_network_info',
+  isInternetAvailable: 'is_internet_available',
+  isGatewayAvailable: 'is_gateway_available',
+  canPingAddress: 'can_ping_address', // Unused externally.
+  setLoggingType: 'set_logging_type', // Need better testing
+}
+
 
 let interfaceCheckerId: number;
+// For some reason, setting setIsRefreshing doesn't update the code side of the understanding.
+// So have to make my own variable that does the exact same thing... lol...
+let isActuallyRefreshing = true;
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const [ loaded, setLoaded ] = useState(false);
@@ -46,19 +71,25 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
   const [ openVPNDisabled, setOpenVPNDisabled ] = useState(false);
-  const [ isRefreshing, setIsRefreshing ] = useState(true);
+  const [ isRefreshing, setIsRefreshing ] = useState(true); // This is always true on the code-side... idk why.
+
 
   const interfaceChecker = () => {
     clearTimeout(interfaceCheckerId);
     interfaceCheckerId = window.setTimeout(() => {
-      if (isRefreshing) {
+      if (isActuallyRefreshing) {
         return interfaceChecker();
       }
+
       getInterfaceData().finally(interfaceChecker);
     }, 5000);
   }
 
   const collectNetworkInfo = () => {
+    if (isActuallyRefreshing && loaded) {
+      return;
+    }
+
     clearTimeout(interfaceCheckerId);
     window.setTimeout(() => {
       getInterfaceData().finally(interfaceChecker);
@@ -85,35 +116,54 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
   }
 
   const getInterfaceData = async () => {
-    debugger;
     setIsRefreshing(true);
+    isActuallyRefreshing = true;
+    console.log('TunnelDeck - Collecting interface data');
+    try {
 
-    await tryCatchHandler('resetCachedData', serverAPI.callPluginMethod<{}, boolean>, 'reset_cached_data', {}, true)
 
-    const priorityInterfaceLanIpResponse = await tryCatchHandler('priorityInterfaceLaneIpResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'get_priority_lan_ip', {}, {result: {success:false, data: 'N/A'}});
-    const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
-    setPriorityInterfaceLanIp(lanIpRes.data);
+    await tryCatchHandler(funcMap.resetCachedData, serverAPI.callPluginMethod<{}, boolean>, funcMap.resetCachedData, {}, true)
 
-    const isSteamSteamAvailableResponse = await tryCatchHandler('isSteamSteamAvailableResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'is_internet_available', {}, {result: {success:false, data: 'N/A'}});
-    setCanReachSteam(isSteamSteamAvailableResponse.result && isSteamSteamAvailableResponse.success ? 'Yes' : 'No');
+    const pPriorityInterfaceLaneIp = tryCatchHandler(funcMap.getPriorityLanIp, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.getPriorityLanIp, {}, {result: {success:false, data: 'N/A'}})
+        .then((priorityInterfaceLanIpResponse) => {
 
-    const priorityInterfaceResponse = await tryCatchHandler('priorityInterfaceResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'get_priority_interface_name', {}, {result: false});
-    const interfaceRes = priorityInterfaceResponse.result as PluginResponse;
-    setPriorityInterface(interfaceRes.data);
+          const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
+          setPriorityInterfaceLanIp(lanIpRes.data);
+        });
 
-    const isGatewayAvailableResponse = await tryCatchHandler('isGatewayAvailableResponse', serverAPI.callPluginMethod<{}, PluginResponse>, 'is_gateway_available', {}, {result: false});
-    setCanReachGateway(isGatewayAvailableResponse.result && isGatewayAvailableResponse.success ? 'Yes' : 'No');
+    const pIsSteamAvailable = tryCatchHandler(funcMap.isInternetAvailable, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.isInternetAvailable, {}, {result: {success:false, data: 'N/A'}})
+        .then((isSteamAvailableResponse)  => {
+          setCanReachSteam(isSteamAvailableResponse.result && isSteamAvailableResponse.success ? 'Yes' : 'No');
+        });
 
-    const priorityNetworkInfo = await tryCatchHandler('priorityNetworkInfo', serverAPI.callPluginMethod<{}, string>, 'get_prioritized_network_info', {}, 'N/A Err')
-    setPriorityNetworkInfo(priorityNetworkInfo.result.split('\n'));
+    const pPriorityInterface = tryCatchHandler(funcMap.getPriorityInterfaceName, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.getPriorityInterfaceName, {}, {result: false})
+        .then((priorityInterfaceResponse) => {
+          const interfaceRes = priorityInterfaceResponse.result as PluginResponse;
+          setPriorityInterface(interfaceRes.data);
+        });
 
-    setIsRefreshing(false);
+    const pIsGatewayAvailable = tryCatchHandler(funcMap.isGatewayAvailable, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.isGatewayAvailable, {}, {result: false})
+        .then((isGatewayAvailableResponse) => {
+          setCanReachGateway(isGatewayAvailableResponse.result && isGatewayAvailableResponse.success ? 'Yes' : 'No');
+        });
+
+    const pPriorityNetworkInfo = tryCatchHandler(funcMap.getPrioritizedNetworkInfo, serverAPI.callPluginMethod<{}, string>, funcMap.getPrioritizedNetworkInfo, {}, {result: 'N/A Err'})
+        .then((priorityNetworkInfo) => {
+          setPriorityNetworkInfo(priorityNetworkInfo.result.split('\n'));
+        });
+    await Promise.all([pIsGatewayAvailable, pIsSteamAvailable, pPriorityInterface, pPriorityInterfaceLaneIp, pPriorityNetworkInfo])
+    } catch (e) {
+      console.error('TunnelDeck - Error: ', e);
+    } finally {
+      console.log('TunnelDeck - Finished refreshing');
+      setIsRefreshing(false);
+      isActuallyRefreshing = false;
+    }
   }
 
   const loadConnections = async () => {
-
     try {
-      const activeConnectionResponse = await serverAPI.callPluginMethod<{}, Connection>('active_connection', {});
+      const activeConnectionResponse = await serverAPI.callPluginMethod<{}, Connection>(funcMap.activeConnection, {});
       const activeConnection = activeConnectionResponse.result as Connection;
       setActiveConnection(activeConnection);
       setIpv6Disabled((activeConnection.ipv6_disabled) ? true : false);
@@ -122,7 +172,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
 
     try {
-      const openVPNDisabled = await serverAPI.callPluginMethod<{}, boolean>('is_openvpn_pacman_installed', {});
+      const openVPNDisabled = await serverAPI.callPluginMethod<{}, boolean>(funcMap.isOpenvpnPacmanInstalled, {});
       setOpenVPNDisabled(openVPNDisabled.result as boolean);
     } catch (error) {
       console.error(error);
@@ -130,7 +180,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
     if(!openVPNDisabled) {
       try {
-        const openVPNEnabledResponse = await serverAPI.callPluginMethod<{}, boolean>('is_openvpn_enabled', {});
+        const openVPNEnabledResponse = await serverAPI.callPluginMethod<{}, boolean>(funcMap.isOpenvpnEnabled, {});
         setOpenVPNEnabled(openVPNEnabledResponse.result as boolean);
       } catch (error) {
         console.error(error);
@@ -138,7 +188,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
 
     try {
-      const response = await serverAPI.callPluginMethod<{}, Connection[]>('show', {});
+      const response = await serverAPI.callPluginMethod<{}, Connection[]>(funcMap.show, {});
       const connections = response.result as Connection[];
       const filtered = connections
       .filter((connection) => ['vpn', 'wireguard'].includes(connection.type))
@@ -153,27 +203,27 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
       console.error(error);
     }
 
-    setLoaded(true);
     collectNetworkInfo();
+    setLoaded(true);
   }
 
   const toggleConnection = async (connection: Connection, switchValue: boolean) => {
     setRefreshState();
-    await serverAPI.callPluginMethod((switchValue) ? 'up' : 'down', { uuid: connection.uuid });
+    await serverAPI.callPluginMethod((switchValue) ? funcMap.up : funcMap.down, { uuid: connection.uuid });
     collectNetworkInfo();
   }
 
   const toggleIpv6 = async(switchValue: boolean) => {
     setIpv6Disabled(switchValue);
     setRefreshState();
-    await serverAPI.callPluginMethod((switchValue) ? 'disable_ipv6' : 'enable_ipv6', {});
+    await serverAPI.callPluginMethod((switchValue) ? funcMap.disableIpv6 : funcMap.enableIpv6, {});
     collectNetworkInfo();
   }
 
   const toggleOpenVPN = async(switchValue: boolean) => {
     setOpenVPNEnabled(switchValue);
     setRefreshState();
-    await serverAPI.callPluginMethod((switchValue) ? 'enable_openvpn' : 'disable_openvpn', {});
+    await serverAPI.callPluginMethod((switchValue) ? funcMap.enableOpenvpn : funcMap.disableOpenvpn, {});
     collectNetworkInfo();
   }
 
@@ -293,7 +343,6 @@ export default definePlugin((serverApi: ServerAPI) => {
     content: <Content serverAPI={serverApi} />,
     icon: <FaShieldAlt />,
     onDismount() {
-      console.log('sup!');
       clearTimeout(interfaceCheckerId);
     }
   };
