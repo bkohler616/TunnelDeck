@@ -26,9 +26,17 @@ type Connection = {
   ipv6_disabled?: boolean
 }
 
-type PluginResponse = {
+interface PluginResponse {
   success: boolean,
   data: string,
+}
+
+interface InterfaceResponse extends PluginResponse {
+  ip: string,
+}
+
+interface NetworkResponse extends PluginResponse {
+  gateway_ping: boolean,
 }
 
 const funcMap = {
@@ -44,11 +52,16 @@ const funcMap = {
   isOpenvpnEnabled: 'is_openvpn_enabled',
   enableOpenvpn: 'enable_openvpn',
   disableOpenvpn: 'disable_openvpn',
-  getPriorityLanIp: 'get_priority_lan_ip',
-  getPriorityInterfaceName: 'get_priority_interface_name',
-  getPrioritizedNetworkInfo: 'get_prioritized_network_info',
-  isInternetAvailable: 'is_internet_available',
-  isGatewayAvailable: 'is_gateway_available',
+
+  getPriorityInterface: 'get_priority_interface',
+
+  // getPriorityLanIp: 'get_priority_lan_ip',
+  // getPriorityInterfaceName: 'get_priority_interface_name', // Remove this in favour of new method:
+
+  isInternetAvailable: 'is_internet_available', // to remove
+  getPrioritizedNetworkInfo: 'get_prioritized_network_info',// to remove
+
+  // isGatewayAvailable: 'is_gateway_available',
   canPingAddress: 'can_ping_address', // Unused externally.
   setLoggingType: 'set_logging_type', // Need better testing
 }
@@ -89,6 +102,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     if (isActuallyRefreshing && loaded) {
       return;
     }
+    isActuallyRefreshing = true;
 
     clearTimeout(interfaceCheckerId);
     window.setTimeout(() => {
@@ -124,11 +138,11 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
     await tryCatchHandler(funcMap.resetCachedData, serverAPI.callPluginMethod<{}, boolean>, funcMap.resetCachedData, {}, true)
 
-    const pPriorityInterfaceLaneIp = tryCatchHandler(funcMap.getPriorityLanIp, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.getPriorityLanIp, {}, {result: {success:false, data: 'N/A'}})
+    const pPriorityInterfaceLaneIp = tryCatchHandler(funcMap.getPriorityInterface, serverAPI.callPluginMethod<{}, InterfaceResponse>, funcMap.getPriorityInterface, {}, {result: {success:false, data: 'N/A'}})
         .then((priorityInterfaceLanIpResponse) => {
-
-          const lanIpRes = priorityInterfaceLanIpResponse.result as PluginResponse;
-          setPriorityInterfaceLanIp(lanIpRes.data);
+          const interfaceResponse = priorityInterfaceLanIpResponse.result as InterfaceResponse;
+          setPriorityInterfaceLanIp(interfaceResponse.success ? interfaceResponse.ip : 'N/A');
+          setPriorityInterface(interfaceResponse.success ? interfaceResponse.data : 'N/A');
         });
 
     const pIsSteamAvailable = tryCatchHandler(funcMap.isInternetAvailable, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.isInternetAvailable, {}, {result: {success:false, data: 'N/A'}})
@@ -136,22 +150,15 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
           setCanReachSteam(isSteamAvailableResponse.result && isSteamAvailableResponse.success ? 'Yes' : 'No');
         });
 
-    const pPriorityInterface = tryCatchHandler(funcMap.getPriorityInterfaceName, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.getPriorityInterfaceName, {}, {result: false})
-        .then((priorityInterfaceResponse) => {
-          const interfaceRes = priorityInterfaceResponse.result as PluginResponse;
-          setPriorityInterface(interfaceRes.data);
-        });
-
-    const pIsGatewayAvailable = tryCatchHandler(funcMap.isGatewayAvailable, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.isGatewayAvailable, {}, {result: false})
-        .then((isGatewayAvailableResponse) => {
-          setCanReachGateway(isGatewayAvailableResponse.result && isGatewayAvailableResponse.success ? 'Yes' : 'No');
-        });
-
-    const pPriorityNetworkInfo = tryCatchHandler(funcMap.getPrioritizedNetworkInfo, serverAPI.callPluginMethod<{}, string>, funcMap.getPrioritizedNetworkInfo, {}, {result: 'N/A Err'})
+    const pPriorityNetworkInfo = tryCatchHandler(funcMap.getPrioritizedNetworkInfo, serverAPI.callPluginMethod<{}, NetworkResponse>, funcMap.getPrioritizedNetworkInfo, {}, {result: {success:false, data: 'N/A'}})
         .then((priorityNetworkInfo) => {
-          setPriorityNetworkInfo(priorityNetworkInfo.result.split('\n'));
+          const networkResponse = priorityNetworkInfo.result as NetworkResponse;
+          setPriorityNetworkInfo(networkResponse.success ? networkResponse.data.split('\n') : ['N/A']);
+          setCanReachGateway(networkResponse.success && networkResponse.gateway_ping ? 'Yes' : 'No');
         });
-    await Promise.all([pIsGatewayAvailable, pIsSteamAvailable, pPriorityInterface, pPriorityInterfaceLaneIp, pPriorityNetworkInfo])
+
+
+    await Promise.all([pIsSteamAvailable, pPriorityInterfaceLaneIp, pPriorityNetworkInfo])
     } catch (e) {
       console.error('TunnelDeck - Error: ', e);
     } finally {
@@ -166,7 +173,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
       const activeConnectionResponse = await serverAPI.callPluginMethod<{}, Connection>(funcMap.activeConnection, {});
       const activeConnection = activeConnectionResponse.result as Connection;
       setActiveConnection(activeConnection);
-      setIpv6Disabled((activeConnection.ipv6_disabled) ? true : false);
+      setIpv6Disabled(!!(activeConnection.ipv6_disabled));
     } catch (error) {
       console.error(error);
     }
