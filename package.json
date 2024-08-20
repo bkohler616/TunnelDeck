@@ -1,6 +1,6 @@
 {
   "name": "tunneldeck",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Enables VPN support within Gaming Mode.",
   "scripts": {
     "build": "shx rm -rf dist && rollup -c",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/steve228uk/TunnelDeck.git"
+    "url": "git+https://github.com/bkohler616/TunnelDeck.git"
   },
   "keywords": [
     "decky",
@@ -17,12 +17,12 @@
     "steam-deck",
     "deck"
   ],
-  "author": "Stephen Radford <steve228uk@gmail.com>",
+  "author": "Stephen Radford <bkohler616@hotmail.com>",
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/steve228uk/TunnelDeck/issues"
+    "url": "https://github.com/bkohler616/TunnelDeck/issues"
   },
-  "homepage": "https://github.com/steve228uk/TunnelDeck#readme",
+  "homepage": "https://github.com/bkohler616/TunnelDeck#readme",
   "devDependencies": {
     "@rollup/plugin-commonjs": "^21.1.0",
     "@rollup/plugin-json": "^4.1.0",

@@ -6,7 +6,8 @@ import {
   staticClasses,
   ToggleField,
   ButtonItem,
-  Navigation
+  Navigation,
+  Field
 } from "decky-frontend-lib";
 
 import {
@@ -25,28 +26,160 @@ type Connection = {
   ipv6_disabled?: boolean
 }
 
+interface PluginResponse {
+  success: boolean,
+  data: string,
+}
+
+interface InterfaceResponse extends PluginResponse {
+  ip: string,
+}
+
+interface NetworkResponse extends PluginResponse {
+  gateway_ping: boolean,
+}
+
+const funcMap = {
+  show: 'show',
+  up: 'up',
+  down: 'down',
+  activeConnection: 'active_connection',
+  resetCachedData: 'reset_cached_data',
+  disableIpv6: 'disable_ipv6',
+  enableIpv6: 'enable_ipv6',
+  getSteamIp: 'get_steam_ip',
+  isOpenvpnPacmanInstalled: 'is_openvpn_pacman_installed',
+  isOpenvpnEnabled: 'is_openvpn_enabled',
+  enableOpenvpn: 'enable_openvpn',
+  disableOpenvpn: 'disable_openvpn',
+
+  getPriorityInterface: 'get_priority_interface',
+
+  // getPriorityLanIp: 'get_priority_lan_ip',
+  // getPriorityInterfaceName: 'get_priority_interface_name', // Remove this in favour of new method:
+
+  isInternetAvailable: 'is_internet_available', // to remove
+  getPrioritizedNetworkInfo: 'get_prioritized_network_info',// to remove
+
+  // isGatewayAvailable: 'is_gateway_available',
+  canPingAddress: 'can_ping_address', // Unused externally.
+  setLoggingType: 'set_logging_type', // Need better testing
+}
+
+
+let interfaceCheckerId: number;
+// For some reason, setting setIsRefreshing doesn't update the code side of the understanding.
+// So have to make my own variable that does the exact same thing... lol...
+let isActuallyRefreshing = true;
 const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
   const [ loaded, setLoaded ] = useState(false);
   const [ connections, setConnections ] = useState<Connection[]>([]);
+  const [ priorityInterface, setPriorityInterface ] = useState('N/A');
+  const [ priorityInterfaceLanIp, setPriorityInterfaceLanIp ] = useState('N/A');
+  const [ canReachGateway, setCanReachGateway ] = useState('N/A');
+  const [ canReachSteam, setCanReachSteam ] = useState('N/A');
+  const [ priorityNetworkInfo, setPriorityNetworkInfo ] = useState(['N/A']);
   const [ activeConnection, setActiveConnection ] = useState<Connection>();
   const [ ipv6Disabled, setIpv6Disabled ] = useState(false);
   const [ openVPNEnabled, setOpenVPNEnabled ] = useState(false);
   const [ openVPNDisabled, setOpenVPNDisabled ] = useState(false);
+  const [ isRefreshing, setIsRefreshing ] = useState(true); // This is always true on the code-side... idk why.
+
+
+  const interfaceChecker = () => {
+    clearTimeout(interfaceCheckerId);
+    interfaceCheckerId = window.setTimeout(() => {
+      if (isActuallyRefreshing) {
+        return interfaceChecker();
+      }
+
+      getInterfaceData().finally(interfaceChecker);
+    }, 5000);
+  }
+
+  const collectNetworkInfo = () => {
+    if (isActuallyRefreshing && loaded) {
+      return;
+    }
+    isActuallyRefreshing = true;
+
+    clearTimeout(interfaceCheckerId);
+    window.setTimeout(() => {
+      getInterfaceData().finally(interfaceChecker);
+    }, 1000);
+  }
+
+  const tryCatchHandler = async (name: String, func: Function, methodName: String, args: Object, defaultRes: Object) => {
+    try {
+      return await func(methodName, args);
+    } catch (e) {
+      console.error('Error handling function', name, methodName);
+      return defaultRes;
+    }
+  }
+
+  const setRefreshState = () => {
+    clearTimeout(interfaceCheckerId);
+    setIsRefreshing(true);
+    setPriorityInterface('N/A');
+    setPriorityInterfaceLanIp('N/A');
+    setCanReachSteam('N/A');
+    setCanReachGateway('N/A');
+    setPriorityNetworkInfo(['N/A']);
+  }
+
+  const getInterfaceData = async () => {
+    setIsRefreshing(true);
+    isActuallyRefreshing = true;
+    console.log('TunnelDeck - Collecting interface data');
+    try {
+
+
+    await tryCatchHandler(funcMap.resetCachedData, serverAPI.callPluginMethod<{}, boolean>, funcMap.resetCachedData, {}, true)
+
+    const pPriorityInterfaceLaneIp = tryCatchHandler(funcMap.getPriorityInterface, serverAPI.callPluginMethod<{}, InterfaceResponse>, funcMap.getPriorityInterface, {}, {result: {success:false, data: 'N/A'}})
+        .then((priorityInterfaceLanIpResponse) => {
+          const interfaceResponse = priorityInterfaceLanIpResponse.result as InterfaceResponse;
+          setPriorityInterfaceLanIp(interfaceResponse.success ? interfaceResponse.ip : 'N/A');
+          setPriorityInterface(interfaceResponse.success ? interfaceResponse.data : 'N/A');
+        });
+
+    const pIsSteamAvailable = tryCatchHandler(funcMap.isInternetAvailable, serverAPI.callPluginMethod<{}, PluginResponse>, funcMap.isInternetAvailable, {}, {result: {success:false, data: 'N/A'}})
+        .then((isSteamAvailableResponse)  => {
+          setCanReachSteam(isSteamAvailableResponse.result && isSteamAvailableResponse.success ? 'Yes' : 'No');
+        });
+
+    const pPriorityNetworkInfo = tryCatchHandler(funcMap.getPrioritizedNetworkInfo, serverAPI.callPluginMethod<{}, NetworkResponse>, funcMap.getPrioritizedNetworkInfo, {}, {result: {success:false, data: 'N/A'}})
+        .then((priorityNetworkInfo) => {
+          const networkResponse = priorityNetworkInfo.result as NetworkResponse;
+          setPriorityNetworkInfo(networkResponse.success ? networkResponse.data.split('\n') : ['N/A']);
+          setCanReachGateway(networkResponse.success && networkResponse.gateway_ping ? 'Yes' : 'No');
+        });
+
+
+    await Promise.all([pIsSteamAvailable, pPriorityInterfaceLaneIp, pPriorityNetworkInfo])
+    } catch (e) {
+      console.error('TunnelDeck - Error: ', e);
+    } finally {
+      console.log('TunnelDeck - Finished refreshing');
+      setIsRefreshing(false);
+      isActuallyRefreshing = false;
+    }
+  }
 
   const loadConnections = async () => {
-
     try {
-      const activeConnectionResponse = await serverAPI.callPluginMethod<{}, Connection>('active_connection', {});
+      const activeConnectionResponse = await serverAPI.callPluginMethod<{}, Connection>(funcMap.activeConnection, {});
       const activeConnection = activeConnectionResponse.result as Connection;
       setActiveConnection(activeConnection);
-      setIpv6Disabled((activeConnection.ipv6_disabled) ? true : false);
+      setIpv6Disabled(!!(activeConnection.ipv6_disabled));
     } catch (error) {
       console.error(error);
     }
 
     try {
-      const openVPNDisabled = await serverAPI.callPluginMethod<{}, boolean>('is_openvpn_pacman_installed', {});
+      const openVPNDisabled = await serverAPI.callPluginMethod<{}, boolean>(funcMap.isOpenvpnPacmanInstalled, {});
       setOpenVPNDisabled(openVPNDisabled.result as boolean);
     } catch (error) {
       console.error(error);
@@ -54,7 +187,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
     if(!openVPNDisabled) {
       try {
-        const openVPNEnabledResponse = await serverAPI.callPluginMethod<{}, boolean>('is_openvpn_enabled', {});
+        const openVPNEnabledResponse = await serverAPI.callPluginMethod<{}, boolean>(funcMap.isOpenvpnEnabled, {});
         setOpenVPNEnabled(openVPNEnabledResponse.result as boolean);
       } catch (error) {
         console.error(error);
@@ -62,7 +195,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
     }
 
     try {
-      const response = await serverAPI.callPluginMethod<{}, Connection[]>('show', {});
+      const response = await serverAPI.callPluginMethod<{}, Connection[]>(funcMap.show, {});
       const connections = response.result as Connection[];
       const filtered = connections
       .filter((connection) => ['vpn', 'wireguard'].includes(connection.type))
@@ -77,25 +210,35 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
       console.error(error);
     }
 
+    collectNetworkInfo();
     setLoaded(true);
   }
 
   const toggleConnection = async (connection: Connection, switchValue: boolean) => {
-    await serverAPI.callPluginMethod((switchValue) ? 'up' : 'down', { uuid: connection.uuid });
+    setRefreshState();
+    await serverAPI.callPluginMethod((switchValue) ? funcMap.up : funcMap.down, { uuid: connection.uuid });
+    collectNetworkInfo();
   }
 
   const toggleIpv6 = async(switchValue: boolean) => {
     setIpv6Disabled(switchValue);
-    await serverAPI.callPluginMethod((switchValue) ? 'disable_ipv6' : 'enable_ipv6', {});
+    setRefreshState();
+    await serverAPI.callPluginMethod((switchValue) ? funcMap.disableIpv6 : funcMap.enableIpv6, {});
+    collectNetworkInfo();
   }
 
   const toggleOpenVPN = async(switchValue: boolean) => {
     setOpenVPNEnabled(switchValue);
-    await serverAPI.callPluginMethod((switchValue) ? 'enable_openvpn' : 'disable_openvpn', {});
+    setRefreshState();
+    await serverAPI.callPluginMethod((switchValue) ? funcMap.enableOpenvpn : funcMap.disableOpenvpn, {});
+    collectNetworkInfo();
   }
 
   useEffect(() => {
     loadConnections();
+    return () => {
+      clearTimeout(interfaceCheckerId);
+    }
   }, []);
 
   return (
@@ -121,7 +264,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
 
         <PanelSectionRow>
           <ButtonItem onClick={() => {
-            Navigation.NavigateToExternalWeb('https://github.com/steve228uk/TunnelDeck#readme');
+            Navigation.NavigateToExternalWeb('https://github.com/bkohler616/TunnelDeck#readme');
             Navigation.CloseSideMenus();
           }}>
             How Do I Add Connections?
@@ -129,6 +272,38 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
         </PanelSectionRow>
 
       </PanelSection>
+
+      <PanelSection title="Network Info" spinner={isRefreshing}>
+        <PanelSectionRow>
+          <Field
+            label='Prioritized Network Interface'
+            description={priorityInterface}
+            focusable={true}>
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Field
+              label='Prioritized Interface LAN IP'
+              description={priorityInterfaceLanIp}
+              focusable={true}>
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Field
+              label='Can reach gateway'
+              description={canReachGateway}
+              focusable={true}>
+          </Field>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Field
+              label='Can reach steampowered.com'
+              description={canReachSteam}
+              focusable={true}>
+          </Field>
+        </PanelSectionRow>
+      </PanelSection>
+
       <PanelSection title="Settings">
         <PanelSectionRow>
           <ToggleField
@@ -150,6 +325,21 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
           onChange={toggleIpv6} />
         </PanelSectionRow>
       </PanelSection>
+      <PanelSection title="Additional network info" spinner={isRefreshing}>
+
+        {loaded && priorityNetworkInfo.length == 0 && <PanelSectionRow>
+          No Network Info found
+        </PanelSectionRow>}
+
+        {priorityNetworkInfo.length > 0 && priorityNetworkInfo.map((infoItem) => (
+            <PanelSectionRow>
+              <Field
+                  description={infoItem}
+                  focusable={true}
+                  padding={"none"}/>
+            </PanelSectionRow>
+        ))}
+      </PanelSection>
     </>
   );
 };
@@ -159,5 +349,8 @@ export default definePlugin((serverApi: ServerAPI) => {
     title: <div className={staticClasses.Title}>TunnelDeck</div>,
     content: <Content serverAPI={serverApi} />,
     icon: <FaShieldAlt />,
+    onDismount() {
+      clearTimeout(interfaceCheckerId);
+    }
   };
 });
