@@ -17,7 +17,15 @@
     "steam-deck",
     "deck"
   ],
-  "author": "Stephen Radford <bkohler616@hotmail.com>",
+  "contributors": [{
+    "name": "Benjamin Kohler",
+    "email": "bkohler616@hotmail.com",
+    "url": "https://github.com/bkohler616"
+  }, {
+    "name": "Stephen Radford",
+    "email": "steve228uk@gmail.com",
+    "url": "https://twitter.com/steve228uk"
+  }],
   "license": "BSD-3-Clause",
   "bugs": {
     "url": "https://github.com/bkohler616/TunnelDeck/issues"

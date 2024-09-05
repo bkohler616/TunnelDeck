@@ -1,6 +1,6 @@
 {
   "name": "TunnelDeck",
-  "author": "Stephen Radford",
+  "author": "Benjamin Kohler",
   "flags": ["root"],
   "publish": {
     "tags": ["vpn", "root"],
