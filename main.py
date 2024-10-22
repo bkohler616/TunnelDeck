@@ -114,13 +114,15 @@ class Plugin:
         logger.info("Loading OpenVPN setting")
         await self.reset_cached_data(self)
         openvpn_enabled = self.settings.getSetting("openvpn_enabled", False)
+        logger.info("OpenVPN enabled: " + "yes" if openvpn_enabled else "no")
         if openvpn_enabled:
-            logger.info("OpenVPN enabled: " + "yes" if openvpn_enabled else "no")
             run_install_script()
 
     async def _unload(self):
-        subprocess.run(["bash", path.dirname(__file__) + "/extensions/uninstall"],
-                       cwd=path.dirname(__file__) + "/extensions")
+        openvpn_enabled = self.settings.getSetting("openvpn_enabled", False)
+        logger.info("OpenVPN enabled: " + "yes" if openvpn_enabled else "no")
+        if openvpn_enabled:
+            run_uninstall_script()
         pass
 
     # endregion
@@ -336,8 +338,6 @@ class Plugin:
     # Can we ping steampowered.com
     async def is_internet_available(self):
         return await self.can_ping_address(self, "steampowered.com")
-
-    # Can we ping the priority interface's gateway or DNS
 
     # Can we ping the provided network address
     async def can_ping_address(self, address):

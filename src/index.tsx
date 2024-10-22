@@ -54,14 +54,9 @@ const funcMap = {
   disableOpenvpn: 'disable_openvpn',
 
   getPriorityInterface: 'get_priority_interface',
+  isInternetAvailable: 'is_internet_available',
+  getPrioritizedNetworkInfo: 'get_prioritized_network_info',
 
-  // getPriorityLanIp: 'get_priority_lan_ip',
-  // getPriorityInterfaceName: 'get_priority_interface_name', // Remove this in favour of new method:
-
-  isInternetAvailable: 'is_internet_available', // to remove
-  getPrioritizedNetworkInfo: 'get_prioritized_network_info',// to remove
-
-  // isGatewayAvailable: 'is_gateway_available',
   canPingAddress: 'can_ping_address', // Unused externally.
   setLoggingType: 'set_logging_type', // Need better testing
 }
@@ -210,8 +205,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({ serverAPI }) => {
       console.error(error);
     }
 
-    collectNetworkInfo();
     setLoaded(true);
+    collectNetworkInfo();
   }
 
   const toggleConnection = async (connection: Connection, switchValue: boolean) => {
