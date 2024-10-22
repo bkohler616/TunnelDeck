@@ -43,7 +43,7 @@ Open the quick access menu by clicking the **...** on your Steam Deck and select
 
 ## Credits
 
-- [Benjamin Kohler] (https://github.com/bkohler616) - Developer
+- [Benjamin Kohler](https://github.com/bkohler616) - Developer
 - [Stephen Radford](https://twitter.com/steve228uk) - Original Developer
 - [AAGaming](https://aa.catvibers.me) - Answering Stephen's annoying questions
 - [Kevin Wammer](https://overkill.wtf) - Idea and name
