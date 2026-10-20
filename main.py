@@ -8,6 +8,19 @@ import re
 import json
 import traceback
 
+def _nmcli_env():
+    # System programs must not load libraries bundled with Decky's PyInstaller build.
+    from os import environ
+
+    env = environ.copy()
+    original = env.pop("LD_LIBRARY_PATH_ORIG", None)
+    if original is None:
+        env.pop("LD_LIBRARY_PATH", None)
+    else:
+        env["LD_LIBRARY_PATH"] = original
+    return env
+
+
 USER = get_user()
 HOME_PATH = "/home/" + USER
 HOMEBREW_PATH = HOME_PATH + "/homebrew"
@@ -64,7 +77,7 @@ def gateway_finder(new_id, parser_type):
 
 def get_active_connection():
     result = subprocess.run(["nmcli", "-t", "connection", "show", "--active"],
-                            text=True, capture_output=True).stdout
+                            text=True, capture_output=True, env=_nmcli_env()).stdout
     connections = result.splitlines()
     # connections.pop(0)
     mapped = map(connection_mapper, connections)
@@ -237,7 +250,7 @@ class Plugin:
 
             nmcli_res = subprocess.run(["nmcli", "-f", "all", "-t", "device", "show", interface_name['data']],
                                        text=True,
-                                       capture_output=True).stdout.splitlines()
+                                       capture_output=True, env=_nmcli_env()).stdout.splitlines()
             logger.debug("get_prioritized_network_info nmcli_res %s", nmcli_res)
 
             network_info = []
@@ -373,7 +386,7 @@ class Plugin:
     # Lists the connections from network manager.
     # If device is -- then it's disconnected.
     async def show(self):
-        result = subprocess.run(["nmcli", "-t", "connection", "show"], text=True, capture_output=True).stdout
+        result = subprocess.run(["nmcli", "-t", "connection", "show"], text=True, capture_output=True, env=_nmcli_env()).stdout
         connections = result.splitlines()
         # connections.pop(0)
         mapped = map(connection_mapper, connections)
@@ -384,14 +397,14 @@ class Plugin:
     async def up(self, uuid):
         logger.info("OPENING connection to: " + uuid)
         await self.reset_cached_data(self)
-        result = subprocess.run(["nmcli", "connection", "up", uuid], text=True, capture_output=True).stdout
+        result = subprocess.run(["nmcli", "connection", "up", uuid], text=True, capture_output=True, env=_nmcli_env()).stdout
         return result
 
     # Closes a connection to a VPN
     async def down(self, uuid):
         logger.info("CLOSING connection to: " + uuid)
         await self.reset_cached_data(self)
-        result = subprocess.run(["nmcli", "connection", "down", uuid], text=True, capture_output=True,).stdout
+        result = subprocess.run(["nmcli", "connection", "down", uuid], text=True, capture_output=True, env=_nmcli_env(),).stdout
         return result
 
     # Checks if IPV6 is disabled on Wi-Fi
@@ -405,7 +418,7 @@ class Plugin:
 
         logger.debug("active_connection nmcli call")
         result = subprocess.run(["nmcli", "connection", "show", connection["uuid"], "|", "grep", "ipv6.method"],
-                                text=True, capture_output=True).stdout
+                                text=True, capture_output=True, env=_nmcli_env()).stdout
         connection["ipv6_disabled"] = True if "disabled" in result else False
 
         logger.debug("active_connection nmcli result collected - ipv6 disabled is %s", connection["ipv6_disabled"])
@@ -424,7 +437,7 @@ class Plugin:
             return True
 
         logger.info("DISABLING IPV6 for: " + connection["uuid"])
-        subprocess.run(["nmcli", "connection", "modify", connection["uuid"], "ipv6.method", "disabled"])
+        subprocess.run(["nmcli", "connection", "modify", connection["uuid"], "ipv6.method", "disabled"], env=_nmcli_env())
         subprocess.run(["systemctl", "restart", "NetworkManager"])
         return True
 
@@ -437,7 +450,7 @@ class Plugin:
             return True
 
         logger.info("ENABLING IPV6 for: " + connection["uuid"])
-        subprocess.run(["nmcli", "connection", "modify", connection["uuid"], "ipv6.method", "auto"])
+        subprocess.run(["nmcli", "connection", "modify", connection["uuid"], "ipv6.method", "auto"], env=_nmcli_env())
         subprocess.run(["systemctl", "restart", "NetworkManager"])
         return True
 
